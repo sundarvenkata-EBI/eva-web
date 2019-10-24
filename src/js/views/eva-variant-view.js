@@ -545,13 +545,7 @@ EvaVariantView.prototype = {
         }
     },
 
-    render: function () {
-        this.targetDiv = (this.target instanceof HTMLElement) ? this.target : document.querySelector('#' + this.target);
-        if (!this.targetDiv) {
-            console.log('EVA-VariantView: target ' + this.target + ' not found');
-            return;
-        }
-
+    initGlobalEnv: function() {
         this.queryParams = {species: this.species};
         if(this.annotationVersion){
             var _annotVersion = this.annotationVersion.split("_");
@@ -564,10 +558,19 @@ EvaVariantView.prototype = {
         this.studiesList = (_.contains(this.EVASpeciesList, this.species) ? this.getStudiesList(this.species) : []);
         this.currAssembly = this.getCurrentAssembly(this.species, this.speciesList);
         this.assemblyLink = this.getAssemblyLink(this.currAssembly);
+
+        this.allAccessionIDs = _.map(decodeURI(this.accessionID).split(","), function trim(x) {return x.trim();});
+        console.log(this.allAccessionIDs);
+        this.allVariants = Array();
+        this.allAssociatedSSIDs = Array();
+    },
+
+    storeVariantInfo: function() {
         this.associatedSSIDs = {};
         this.chromosomeContigMap = {};
 
         if (this.accessionID) {
+            console.log(this.accessionID);
             this.accessionCategory = this.accessionID.startsWith("rs") ? "clustered-variants": "submitted-variants";
             this.processQueryWithAccessioningService();
         } else {
@@ -579,16 +582,32 @@ EvaVariantView.prototype = {
         }
 
         // Check if the variant has been merged
-        this.variantIsMerged = false;
-        this.variantMergedFrom = null;
+        this.variant.variantIsMerged = false;
+        this.variant.variantMergedFrom = null;
         var requestedAccessionID = this.accessionID;
         if (this.variant[0] !== undefined) {
             // Resolved variant is undefined in case an error occurs, e. g. if an incorrect accession has been requested
             var responseAccessionID = this.variant[0].id;
             if (requestedAccessionID !== responseAccessionID) {
-                this.variantIsMerged = true;
-                this.variantMergedFrom = requestedAccessionID;
+                this.variant.variantIsMerged = true;
+                this.variant.variantMergedFrom = requestedAccessionID;
             }
+        }
+    },
+
+    render: function () {
+        this.targetDiv = (this.target instanceof HTMLElement) ? this.target : document.querySelector('#' + this.target);
+        if (!this.targetDiv) {
+            console.log('EVA-VariantView: target ' + this.target + ' not found');
+            return;
+        }
+
+        this.initGlobalEnv();
+        for (var accessionID of this.allAccessionIDs) {
+            this.accessionID = accessionID;
+            this.storeVariantInfo();
+            this.allVariants.push(this.variant);
+            this.allAssociatedSSIDs.push(this.associatedSSIDs);
         }
 
         this.draw();
@@ -647,41 +666,48 @@ EvaVariantView.prototype = {
 
     draw: function (data, content) {
         var _this = this;
-        var variant = this.variant;
+        var summaryContent = "";
+        for (var i = 0; i< this.allVariants.length; i++) {
+            this.variant = this.allVariants[i];
+            variant = this.variant;
+            this.associatedSSIDs = this.allAssociatedSSIDs[i];
 
-        if(_.isEmpty(variant)){
-            var noDataEl = document.querySelector("#summary-grid");
-            var noDataElDiv = document.createElement("div");
-            noDataElDiv.innerHTML = '<span>No Data Available</span>';
-            noDataEl.appendChild(noDataElDiv);
-            return;
+            if(_.isEmpty(variant)){
+                var noDataEl = document.querySelector("#summary-grid");
+                var noDataElDiv = document.createElement("div");
+                noDataElDiv.innerHTML = '<span>No Data Available</span>';
+                noDataEl.appendChild(noDataElDiv);
+                return;
+            }
+
+            var variantViewDiv = document.querySelector("#variantView");
+            $(variantViewDiv).addClass('show-div');
+            var summaryEl = document.querySelector("#summary-grid");
+
+            // Adding message for a deprecated variant (if necessary)
+            if (this.variantIsDeprecated) {
+                var deprecatedMessageDiv = document.createElement("div");
+                deprecatedMessageDiv.setAttribute("class", "callout alert");
+                deprecatedMessageDiv.innerHTML = _.escape("Variant " + variant[0].id + " has been deprecated. " +
+                    "Summary information about the variant is displayed below for historical purposes. " +
+                    "This variant ID should not be used.");
+                summaryEl.appendChild(deprecatedMessageDiv);
+            }
+
+            // Adding message for merged variant (if necessary)
+            if (this.variant.variantIsMerged) {
+                var mergedMessageDiv = document.createElement("div");
+                mergedMessageDiv.setAttribute("class", "callout warning");
+                mergedMessageDiv.innerHTML = _.escape("Variant " + this.variant.variantMergedFrom + " has been merged into " +
+                    variant[0].id + ". Information for the target variant is displayed below.");
+                summaryEl.appendChild(mergedMessageDiv);
+            }
+
+            // Adding summary content
+            summaryContent += _this._renderSummaryData(variant);
+            summaryContent += "<p></p>"
         }
 
-        var variantViewDiv = document.querySelector("#variantView");
-        $(variantViewDiv).addClass('show-div');
-        var summaryEl = document.querySelector("#summary-grid");
-
-        // Adding message for a deprecated variant (if necessary)
-        if (this.variantIsDeprecated) {
-            var deprecatedMessageDiv = document.createElement("div");
-            deprecatedMessageDiv.setAttribute("class", "callout alert");
-            deprecatedMessageDiv.innerHTML = _.escape("Variant " + variant[0].id + " has been deprecated. " +
-                "Summary information about the variant is displayed below for historical purposes. " +
-                "This variant ID should not be used.");
-            summaryEl.appendChild(deprecatedMessageDiv);
-        }
-
-        // Adding message for merged variant (if necessary)
-        if (this.variantIsMerged) {
-            var mergedMessageDiv = document.createElement("div");
-            mergedMessageDiv.setAttribute("class", "callout warning");
-            mergedMessageDiv.innerHTML = _.escape("Variant " + this.variantMergedFrom + " has been merged into " +
-                variant[0].id + ". Information for the target variant is displayed below.");
-            summaryEl.appendChild(mergedMessageDiv);
-        }
-
-        // Adding summary content
-        var summaryContent = _this._renderSummaryData(variant);
         var summaryElDiv = document.createElement("div");
         summaryElDiv.innerHTML = summaryContent;
         summaryEl.appendChild(summaryElDiv);
@@ -731,6 +757,7 @@ EvaVariantView.prototype = {
     },
 
     _renderSummaryData: function (data) {
+        console.log(data);
         var _this = this;
         var speciesName, organism;
         if (!_.isEmpty(this.speciesList)) {
