@@ -104,7 +104,7 @@ EvaVariantFilesPanel.prototype = {
     },
     _lowerPanelHeightWhenDataAbsent: function() {
         if (this.invokedFromVariantView) {
-            Ext.getCmp("files-containing-panel-" + this.panelID).setHeight(130);
+            Ext.getCmp("files-panel-" + this.panelID).setHeight(130);
             Ext.getCmp(this.panelID).setHtml(this.panelHeading + "<div>No files data available</div>");
         }
     },
@@ -122,7 +122,7 @@ EvaVariantFilesPanel.prototype = {
                 type: 'vbox',
                 align: 'stretch'
             },
-            id: "files-containing-panel-" + this.panelID,
+            id: "files-panel-" + this.panelID,
             overflowY: true,
             overflowX: true,
             padding: 10,
@@ -181,7 +181,7 @@ EvaVariantFilesPanel.prototype = {
                     _.each(_.keys(results), function (key) {
                         if (this[key].fileId == fileId) {
                             infoTags = this[key].metadata.INFO;
-                            vcfHeaderData = this[key].metadata.header.trim();
+                            vcfHeaderData = this[key].metadata.header? this[key].metadata.header.trim(): "";
                         }
                     }, results);
 

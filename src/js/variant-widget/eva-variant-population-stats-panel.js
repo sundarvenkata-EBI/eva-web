@@ -103,7 +103,7 @@ EvaVariantPopulationStatsPanel.prototype = {
     },
     _lowerPanelHeightWhenDataAbsent: function() {
         if (this.invokedFromVariantView) {
-            Ext.getCmp("population-stats-containing-panel-" + this.populationStatsPanelID).setHeight(120);
+            Ext.getCmp("population-stats-panel-" + this.populationStatsPanelID).setHeight(120);
         }
     },
     _createPanel: function () {
@@ -120,7 +120,7 @@ EvaVariantPopulationStatsPanel.prototype = {
                 type: 'vbox',
                 align: 'stretch'
             },
-            id: "population-stats-containing-panel-" + this.populationStatsPanelID,
+            id: "population-stats-panel-" + this.populationStatsPanelID,
             overflowY: true,
             overflowX: true,
             padding: 10,

@@ -216,7 +216,9 @@ EvaVariantView.prototype = {
         if (typeof(variantObj.alternate) !== "undefined") {
             variantObj.referenceRepr = getAlleleRepr(variantObj.reference);
             variantObj.alternateRepr = getAlleleRepr(variantObj.alternate);
-            variantObj.repr = variantObj.referenceRepr + "/" + variantObj.alternateRepr;
+            variantObj.repr = variantObj.chromosome + ":" + variantObj.start + ":" +
+                                variantObj.referenceRepr + "/" + variantObj.alternateRepr +
+                                (variantObj.id? ":" + variantObj.id: "");
         }
     },
 
@@ -560,8 +562,8 @@ EvaVariantView.prototype = {
         this.assemblyLink = this.getAssemblyLink(this.currAssembly);
 
         this.allAccessionIDs = _.map(decodeURI(this.accessionID).split(","), function trim(x) {return x.trim();});
-        console.log(this.allAccessionIDs);
         this.allVariants = Array();
+        this.allVariantAttrs = Array();
         this.allAssociatedSSIDs = Array();
     },
 
@@ -570,7 +572,6 @@ EvaVariantView.prototype = {
         this.chromosomeContigMap = {};
 
         if (this.accessionID) {
-            console.log(this.accessionID);
             this.accessionCategory = this.accessionID.startsWith("rs") ? "clustered-variants": "submitted-variants";
             this.processQueryWithAccessioningService();
         } else {
@@ -581,16 +582,17 @@ EvaVariantView.prototype = {
             this.processQueryWithEVAService();
         }
 
+        this.variantIsDeprecated = false;
         // Check if the variant has been merged
-        this.variant.variantIsMerged = false;
-        this.variant.variantMergedFrom = null;
+        this.variantIsMerged = false;
+        this.variantMergedFrom = null;
         var requestedAccessionID = this.accessionID;
-        if (this.variant[0] !== undefined) {
+        if (this.variant[0] !== undefined && requestedAccessionID !== "null") {
             // Resolved variant is undefined in case an error occurs, e. g. if an incorrect accession has been requested
             var responseAccessionID = this.variant[0].id;
             if (requestedAccessionID !== responseAccessionID) {
-                this.variant.variantIsMerged = true;
-                this.variant.variantMergedFrom = requestedAccessionID;
+                this.variantIsMerged = true;
+                this.variantMergedFrom = requestedAccessionID;
             }
         }
     },
@@ -603,11 +605,15 @@ EvaVariantView.prototype = {
         }
 
         this.initGlobalEnv();
-        for (var accessionID of this.allAccessionIDs) {
-            this.accessionID = accessionID;
+        for (var i = 0; i < this.allAccessionIDs.length; i++) {
+            this.accessionID = this.allAccessionIDs[i];
             this.storeVariantInfo();
             this.allVariants.push(this.variant);
             this.allAssociatedSSIDs.push(this.associatedSSIDs);
+            this.allVariantAttrs.push({ "variantIsMerged": this.variantIsMerged,
+                                        "variantMergedFrom": this.variantMergedFrom,
+                                        "variantIsDeprecated": this.variantIsDeprecated,
+                                        "accessionCategory": this.accessionCategory})
         }
 
         this.draw();
@@ -620,8 +626,9 @@ EvaVariantView.prototype = {
         var _this = this;
         var variantFilesPanel = new EvaVariantFilesPanel({
             panelTableID: "files-panel-table-" + variantIndex,
-            panelID: variantData.repr ? variantData.repr.replace("/", "_"):'',
+            panelID: variantData.repr ? _this._getValidDivIDFromVariantRepr(variantData.repr):'',
             variantAlleles: variantData.repr,
+            accessionID: variantData.id,
             invokedFromVariantView: true,
             customMargin: '15 0 10 10',
             target: targetDiv,
@@ -665,27 +672,35 @@ EvaVariantView.prototype = {
     },
 
     draw: function (data, content) {
-        var _this = this;
         var summaryContent = "";
+        var consqTypeContent = "";
+
+        var variantViewDiv = document.querySelector("#variantView");
+        $(variantViewDiv).addClass('show-div');
+
+        var summaryEl = document.querySelector("#summary-grid");
+        var consqTypeEl = document.querySelector("#consequence-types-grid");
+        var studyEl = document.querySelector("#studies-grid");
+        var genotypesEl = document.querySelector("#genotypes-grid");
+        var popStatsEl = document.querySelector("#population-stats-grid-view");
+
         for (var i = 0; i< this.allVariants.length; i++) {
             this.variant = this.allVariants[i];
+            this.variantAttr = this.allVariantAttrs[i];
             variant = this.variant;
             this.associatedSSIDs = this.allAssociatedSSIDs[i];
+            var _this = this;
 
             if(_.isEmpty(variant)){
                 var noDataEl = document.querySelector("#summary-grid");
                 var noDataElDiv = document.createElement("div");
                 noDataElDiv.innerHTML = '<span>No Data Available</span>';
                 noDataEl.appendChild(noDataElDiv);
-                return;
+                continue;
             }
 
-            var variantViewDiv = document.querySelector("#variantView");
-            $(variantViewDiv).addClass('show-div');
-            var summaryEl = document.querySelector("#summary-grid");
-
             // Adding message for a deprecated variant (if necessary)
-            if (this.variantIsDeprecated) {
+            if (this.variantAttr.variantIsDeprecated) {
                 var deprecatedMessageDiv = document.createElement("div");
                 deprecatedMessageDiv.setAttribute("class", "callout alert");
                 deprecatedMessageDiv.innerHTML = _.escape("Variant " + variant[0].id + " has been deprecated. " +
@@ -695,69 +710,70 @@ EvaVariantView.prototype = {
             }
 
             // Adding message for merged variant (if necessary)
-            if (this.variant.variantIsMerged) {
+            if (this.variantAttr.variantIsMerged) {
                 var mergedMessageDiv = document.createElement("div");
                 mergedMessageDiv.setAttribute("class", "callout warning");
-                mergedMessageDiv.innerHTML = _.escape("Variant " + this.variant.variantMergedFrom + " has been merged into " +
+                mergedMessageDiv.innerHTML = _.escape("Variant " + this.variantAttr.variantMergedFrom + " has been merged into " +
                     variant[0].id + ". Information for the target variant is displayed below.");
                 summaryEl.appendChild(mergedMessageDiv);
             }
 
-            // Adding summary content
+            // Get summary section content
             summaryContent += _this._renderSummaryData(variant);
             summaryContent += "<p></p>"
+
+            if (this.variantAttr.accessionCategory === "submitted-variants" || this.position) {
+                //Get consequence type section content
+                consqTypeContent += _this._renderConsequenceTypeData(this.variant);
+                if(_.isUndefined(consqTypeContent) || _.isEmpty(consqTypeContent)) {
+                    consqTypeContent += '<span>No Data Available</span>';
+                }
+                consqTypeContent += "<p></p>"
+
+                //Add studies section
+                var variantIndex = 1;
+                this.variant.forEach(function(variant) {
+                    var studyElDiv = document.createElement("div");
+                    console.log(variant.chromosome);
+                    studyElDiv.setAttribute('id', "files_" + _this._getValidDivIDFromVariantRepr(variant.repr));
+                    studyElDiv.setAttribute('class', 'eva variant-widget-panel ocb-variant-stats-panel');
+                    studyEl.appendChild(studyElDiv);
+                    _this.createVariantFilesPanel(studyElDiv, variant, variantIndex);
+                    variantIndex += 1;
+                });
+
+                //Add genotypes section
+                this.variant.forEach(function(variant) {
+                    var genotypesElDiv = document.createElement('div');
+                    genotypesElDiv.setAttribute('id', "genotypes_" + _this._getValidDivIDFromVariantRepr(variant.repr));
+                    genotypesElDiv.setAttribute('class', 'ocb-variant-genotype-grid');
+                    genotypesEl.appendChild(genotypesElDiv);
+                    var variantData = {repr: variant.repr, sourceEntries: variant.sourceEntries, species: _this.species};
+                    _this._createVariantGenotypeGridPanel(genotypesElDiv, variantData);
+                });
+
+                //Add Population statistics section
+                this.variant.forEach(function(variant) {
+                    var popStatsElDiv = document.createElement("div");
+                    popStatsElDiv.setAttribute('id', "popstats_" +  _this._getValidDivIDFromVariantRepr(variant.repr));
+                    popStatsElDiv.setAttribute('class', 'eva variant-widget-panel ocb-variant-stats-panel');
+                    popStatsEl.appendChild(popStatsElDiv);
+                    var variantData = {repr: variant.repr, sourceEntries: variant.sourceEntries, species: _this.species};
+                    _this._createPopulationStatsPanel(popStatsElDiv, variantData);
+                });
+            }
         }
 
         var summaryElDiv = document.createElement("div");
         summaryElDiv.innerHTML = summaryContent;
         summaryEl.appendChild(summaryElDiv);
 
-        if (this.accessionCategory === "submitted-variants" || this.position) {
-            var consqTypeContent = _this._renderConsequenceTypeData(_this.variant);
-            if(!_.isUndefined(consqTypeContent) && !_.isEmpty(consqTypeContent)) {
-                var consqTypeEl = document.querySelector("#consequence-types-grid");
-                var consqTypeElDiv = document.createElement("div");
-                consqTypeElDiv.innerHTML = consqTypeContent;
-                consqTypeEl.appendChild(consqTypeElDiv);
-            }
-
-            var studyEl = document.querySelector("#studies-grid");
-            var variantIndex = 1;
-            this.variant.forEach(function(variant) {
-                var studyElDiv = document.createElement("div");
-                studyElDiv.setAttribute('id', "files_" + variant.reference + "_" + variant.alternate);
-                studyElDiv.setAttribute('class', 'eva variant-widget-panel ocb-variant-stats-panel');
-                studyEl.appendChild(studyElDiv);
-                _this.createVariantFilesPanel(studyElDiv, variant, variantIndex);
-                variantIndex += 1;
-            });
-
-            var genotypesEl = document.querySelector("#genotypes-grid");
-            this.variant.forEach(function(variant) {
-                var genotypesElDiv = document.createElement('div');
-                genotypesElDiv.setAttribute('id', "genotypes_" + variant.reference + "_" + variant.alternate);
-                genotypesElDiv.setAttribute('class', 'ocb-variant-genotype-grid');
-                genotypesEl.appendChild(genotypesElDiv);
-                var variantData = {repr: variant.repr, sourceEntries: variant.sourceEntries, species: _this.species};
-                _this._createVariantGenotypeGridPanel(genotypesElDiv, variantData);
-            });
-
-            var popStatsEl = document.querySelector("#population-stats-grid-view");
-            this.variant.forEach(function(variant) {
-                var popStatsElDiv = document.createElement("div");
-                popStatsElDiv.setAttribute('id', "popstats_" + variant.reference + "_" + variant.alternate);
-                popStatsElDiv.setAttribute('class', 'eva variant-widget-panel ocb-variant-stats-panel');
-                popStatsEl.appendChild(popStatsElDiv);
-                var variantData = {repr: variant.repr, sourceEntries: variant.sourceEntries, species: _this.species};
-                _this._createPopulationStatsPanel(popStatsElDiv, variantData);
-            });
-        } else {
-            document.getElementById("navigation-strip").remove();
-        }
+        var consqTypeElDiv = document.createElement("div");
+        consqTypeElDiv.innerHTML = consqTypeContent;
+        consqTypeEl.appendChild(consqTypeElDiv);
     },
 
     _renderSummaryData: function (data) {
-        console.log(data);
         var _this = this;
         var speciesName, organism;
         if (!_.isEmpty(this.speciesList)) {
@@ -820,7 +836,7 @@ EvaVariantView.prototype = {
             ssInfoContentRows = '',
             submitterInfoHeading = '';
 
-        if (this.accessionCategory === "clustered-variants") {
+        if (this.variantAttr.accessionCategory === "clustered-variants") {
             summaryData = summaryData.map(function(x) {return _.omit(x, [summaryDisplayFields.submitterHandle, summaryDisplayFields.end, summaryDisplayFields.reference, summaryDisplayFields.alternate,
                                                           summaryDisplayFields.evidence, summaryDisplayFields.assemblyMatch,
                                                           summaryDisplayFields.allelesMatch, summaryDisplayFields.validated]);}).slice(0,1);
@@ -860,6 +876,7 @@ EvaVariantView.prototype = {
         var _this = this;
         var variantIndex = 1;
         return variantDataArray.map(function(data) {
+            var consequenceTypeTableID = _this._getValidDivIDFromVariantRepr(data.repr) + "_" + variantIndex;
             var consequenceTypeHeading = '<h4 class="variant-view-h4"> Consequence Types' + (data.repr ? " for "+data.repr : "") +  '</h4>';
             var noDataAvailableSection = consequenceTypeHeading + '<div>No Consequence Type data available</div>';
             if(_.isUndefined(data.annotation)){
@@ -870,7 +887,7 @@ EvaVariantView.prototype = {
                 return noDataAvailableSection;
             }
             annotation = annotation.sort(_this._sortBy('ensemblGeneId', _this._sortBy('ensemblTranscriptId')));
-            var _consequenceTypeTable = consequenceTypeHeading + '<div class="row"><div><table class="ebi-themed-table" id="consequence-type-summary-' + variantIndex + '" class="table hover" style="font-size: small">';
+            var _consequenceTypeTable = consequenceTypeHeading + '<div class="row"><div><table class="ebi-themed-table" id="' + consequenceTypeTableID + '" class="table hover" style="font-size: small">';
             _consequenceTypeTable += '<thead><tr><th>Ensembl Gene ID</th><th>Ensembl Transcript ID</th><th>Accession</th><th>Name</th></tr></thead><tbody>';
             _.each(_.keys(annotation), function (key) {
                 var annotationDetails = this[key];
@@ -912,7 +929,7 @@ EvaVariantView.prototype = {
             }
         };
         var variantPopulationStatsPanel = new EvaVariantPopulationStatsPanel({
-            panelID: variantData.repr ? variantData.repr.replace("/", "_"):'',
+            panelID: variantData.repr ? _this._getValidDivIDFromVariantRepr(variantData.repr):'',
             variantAlleles: variantData.repr,
             invokedFromVariantView: true,
             height: 'auto',
@@ -957,7 +974,7 @@ EvaVariantView.prototype = {
     _createVariantGenotypeGridPanel: function (target, variantData) {
         var _this = this;
         var variantGenotypeGridPanel = new EvaVariantGenotypeGridPanel({
-            panelID: variantData.repr ? variantData.repr.replace("/", "_"):'',
+            panelID: variantData.repr ? _this._getValidDivIDFromVariantRepr(variantData.repr):'',
             variantAlleles: variantData.repr,
             invokedFromVariantView: true,
             target: target,
@@ -974,5 +991,9 @@ EvaVariantView.prototype = {
         variantGenotypeGridPanel.draw();
 
         return variantGenotypeGridPanel;
+    },
+
+    _getValidDivIDFromVariantRepr: function(variantRepr) {
+        return variantRepr.replace(/\//g,"_").replace(/\:/g,"_");
     }
 };

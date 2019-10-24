@@ -120,7 +120,7 @@ EvaVariantGenotypeGridPanel.prototype = {
     },
     _lowerPanelHeightWhenDataAbsent: function() {
         if (this.invokedFromVariantView) {
-            Ext.getCmp("genotypes-containing-panel-" + this.genotypesPanelID).setHeight(120);
+            Ext.getCmp("genotypes-panel-" + this.genotypesPanelID).setHeight(120);
         }
     },
     _createPanel: function () {
@@ -137,7 +137,7 @@ EvaVariantGenotypeGridPanel.prototype = {
                 type: 'vbox',
                 align: 'stretch'
             },
-            id: "genotypes-containing-panel-" + this.genotypesPanelID,
+            id: "genotypes-panel-" + this.genotypesPanelID,
             overflowY: true,
             padding: 0,
             items: [
