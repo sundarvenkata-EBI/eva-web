@@ -687,6 +687,7 @@ EvaVariantView.prototype = {
         for (var i = 0; i< this.allVariants.length; i++) {
             this.variant = this.allVariants[i];
             this.variantAttr = this.allVariantAttrs[i];
+            this.accessionID = this.allAccessionIDs[i];
             variant = this.variant;
             this.associatedSSIDs = this.allAssociatedSSIDs[i];
             var _this = this;
@@ -694,7 +695,8 @@ EvaVariantView.prototype = {
             if(_.isEmpty(variant)){
                 var noDataEl = document.querySelector("#summary-grid");
                 var noDataElDiv = document.createElement("div");
-                noDataElDiv.innerHTML = '<span>No Data Available</span>';
+                var varDesc = this.accessionID ? this.accessionID : this.position;
+                noDataElDiv.innerHTML = '<h4><b><span>No Data Available for ' + varDesc + '</span></b></h4>';
                 noDataEl.appendChild(noDataElDiv);
                 continue;
             }
