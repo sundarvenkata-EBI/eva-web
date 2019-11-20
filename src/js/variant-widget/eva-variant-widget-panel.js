@@ -256,97 +256,10 @@ EvaVariantWidgetPanel.prototype = {
         speciesFilter.on('species:change', function (e) {
             _this._loadAnnotationVersion(annotationFilter, e.species);
             _this._loadListStudies(studyFilter, e.species);
-            //setting default positional value
-            var defaultRegion;
-            switch (e.species) {
-                case 'aaegypti_aaegl3':
-                    defaultRegion = 'supercont1.18:100000-500000';
-                    break;
-                case 'agambiae_agamp4':
-                    defaultRegion = 'X:10000000-11000000';
-                    break;
-                case 'aminimus_1v1':
-                    defaultRegion = 'KB663610:1-500000';
-                    break;
-                case 'aquadriannulatus_quad4av1':
-                    defaultRegion = 'KB665398:1-15000';
-                    break;
-                case 'asinensis_v1':
-                    defaultRegion = 'AXCK02015324:1-15000';
-                    break;
-                case 'astephensi_sda500v1':
-                    defaultRegion = 'KB664288:1-15000';
-                    break;
-                case 'bjuncea_t8466v1':
-                    defaultRegion = 'CM007185.1:4000000-4900000';
-                    break;
-                case 'cporcellus_30':
-                    defaultRegion = 'DS562860.1:4330000-4340000';
-                    break;
-                case 'dmelanogaster_6':
-                    defaultRegion = '2L:4000-8000';
-                    break;
-                case 'drerio_grcz10':
-                    defaultRegion = '1:4220000-4270000';
-                    break;
-                case 'falbicollis_15':
-                    defaultRegion = '10:19105400-19105800';
-                    break;
-                case 'ggallus_galgal4':
-                    defaultRegion = '1:2100000-2500000';
-                    break;
-                case 'hannuus_xrqr10':
-                    defaultRegion = '10:84310000-84315000';
-                    break;
-                case 'hbrasiliensis_asm165405v1':
-                    defaultRegion = 'LVXX01000001.1:3000000-3900000';
-                    break;
-                case 'hsapiens_grch37':
-                    defaultRegion = '13:32889611-32973805';
-                    break;
-                case 'hsapiens_grch38':
-                    defaultRegion = '13:32315474-32400266';
-                    break;
-                case 'lcrocea_10':
-                    defaultRegion = 'LG1:3000-30000';
-                    break;
-                case 'lsalmonis_lsalatlcanadafemalev1':
-                    defaultRegion = 'LBBX01036488.1:6000-7000';
-                    break;
-                case 'mgallopavo_50':
-                    defaultRegion = '1:51940000-51960000';
-                    break;
-                case 'mmulatta_801':
-                    defaultRegion = '2:163845000-163846000';
-                    break;
-                case 'oaries_oarv40':
-                    defaultRegion = '19:48650000-48660000';
-                    break;
-                case 'pyedoensis_pynv1':
-                    defaultRegion = 'Pyn_C0000:4000-14000';
-                    break;
-                case 'sratti_ed321v504':
-                    defaultRegion = 'SRAE_chr2:10000-20000';
-                    break;
-                case 'sscrofa_111':
-                    defaultRegion = 'X:9610000-9611000';
-                    break;
-                case 'slycopersicum_sl250':
-                    defaultRegion = '9:59100000-59200000';
-                    break;
-                case 'tdicoccoides_wewseqv1':
-                    defaultRegion = 'CM007921.1:100000-1000000';
-                    break;
-                case 'vvinifera_12x':
-                    defaultRegion = '18:7850000-7895000';
-                    break;
-                case 'zmays_agpv4':
-                    defaultRegion = '6:166875000-166876000';
-                    break;
-                default:
-                    defaultRegion = '1:3000000-3100000';
-            }
-            _this.formPanelVariantFilter.panel.getForm().findField('region').setValue(defaultRegion);
+            _this._loadDefaultLocusRangeForSpecies(e.species);
+            var locusRange = _this.defaultLocusRange.chromosome + ":" + _this.defaultLocusRange.start + "-"
+                                + _this.defaultLocusRange.end;
+            _this.formPanelVariantFilter.panel.getForm().findField('region').setValue(locusRange);
             _this.variantWidget.toolTabPanel.setActiveTab(0);
         });
 
@@ -638,6 +551,30 @@ EvaVariantWidgetPanel.prototype = {
         });
 
     },
+
+    _loadDefaultLocusRangeForSpecies: function (species) {
+        var _this = this;
+        EvaManager.get({
+            category: 'default-locus-range',
+            resource: '',
+            params: {species: species},
+            async:false,
+            success: function (response) {
+                try {
+                    if ("result" in response.response[0]) {
+                        if ("chromosome" in response.response[0].result[0]) {
+                            _this.defaultLocusRange =  response.response[0].result[0];
+                            return;
+                        }
+                    }
+                    _this.defaultLocusRange = {"chromosome": "1", "start": 3000000, "end": 3100000};
+                } catch (e) {
+                    console.log(e);
+                }
+            }
+        });
+    },
+
     _updateURL: function (values) {
 
         var _this = this;
